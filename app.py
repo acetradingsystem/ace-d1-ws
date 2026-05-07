@@ -1,5 +1,6 @@
 import streamlit as st
 import urllib.request
+import requests
 import json
 import time
 from datetime import datetime
@@ -151,9 +152,10 @@ BASE = "https://fapi.binance.com"
 
 # ── Crypto Scanner Functions ───────────────────────────────────────────────────
 def fetch(url):
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, timeout=10) as r:
-        return json.loads(r.read())
+    headers = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
+    r = requests.get(url, headers=headers, timeout=15)
+    r.raise_for_status()
+    return r.json()
 
 def get_oi_change(symbol):
     try:
@@ -217,9 +219,8 @@ def run_crypto_scan():
 def get_tsx_symbols():
     try:
         url = "https://www.tsx.com/json/company-directory/search/tsx/^*"
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=15) as r:
-            data = json.loads(r.read())
+        r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        data = r.json()
         excluded_keywords = ["etf","cdr","trust","fund","index","ishares","vanguard","horizons","debenture","warrant","bond","preferred","reit"]
         symbols = []
         for c in data.get("results", []):
