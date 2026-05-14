@@ -122,10 +122,7 @@ st.markdown("""
 <div class="ace-header">
     <div class="ace-logo">♠ACE</div>
     <div class="ace-subtitle">Accumulation Computation Engine</div>
-     <div class="ace-subtitle">Ramdom Consolidation Breakout</div>
-      <div class="ace-subtitle">TSX - D1 Timeframe</div>
-
-</div>
+    </div>
 """, unsafe_allow_html=True)
 
 # ── TSX Scanner Functions ──────────────────────────────────────────────────────
@@ -326,7 +323,7 @@ def display_results(results):
         </div>""", unsafe_allow_html=True)
 
 # ── Main Layout ────────────────────────────────────────────────────────────────
-st.markdown('<div class="section-header">◈ RANDOM CONSOLIDATION BREAKOUT - TSX DDALY Timeframey</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-header">RANDOM CONSOLIDATION BREAKOUT - TSX DAILY Timeframe</div>', unsafe_allow_html=True)
 
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
