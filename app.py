@@ -123,7 +123,7 @@ st.markdown("""
     <div class="ace-logo">♠ACE</div>
     <div class="ace-subtitle">Accumulation Computation Engine</div>
      <div class="ace-subtitle">Ramdom Consolidation Breakout</div>
-      <div class="ace-subtitle">D1 Timeframe</div>
+      <div class="ace-subtitle">TSX - D1 Timeframe</div>
 
 </div>
 """, unsafe_allow_html=True)
