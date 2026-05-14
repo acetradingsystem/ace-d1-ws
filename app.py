@@ -122,7 +122,7 @@ st.markdown("""
 <div class="ace-header">
     <div class="ace-logo">♠ACE</div>
     <div class="ace-subtitle">Accumulation Computation Engine</div>
-     <div class="ace-subtitle">Ramdom Accumulation Breakout</div>
+     <div class="ace-subtitle">Ramdom Consolidation Breakout</div>
       <div class="ace-subtitle">D1 Timeframe</div>
 
 </div>
