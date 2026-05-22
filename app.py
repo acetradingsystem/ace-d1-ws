@@ -122,7 +122,7 @@ st.markdown("""
 <div class="ace-header">
     <div class="ace-logo">♠ACE</div>
     <div class="ace-subtitle">Accumulation Computation Engine</div>
-    </div>
+</div>
 """, unsafe_allow_html=True)
 
 # ── TSX Scanner Functions ──────────────────────────────────────────────────────
@@ -150,25 +150,22 @@ def fetch_tsx_stock(symbol):
         import yfinance as yf
         ticker = yf.Ticker(symbol)
         hist   = ticker.history(period="60d")
-        if hist.empty or len(hist) < 12: return None
+        if hist.empty or len(hist) < 22: return None
 
-        today     = hist.iloc[-1]
-        prev      = hist.iloc[-11:-1]
-        close     = float(today["Close"])
-        vol_today = float(today["Volume"])
+        today  = hist.iloc[-1]
+        prev   = hist.iloc[-11:-1]
+        close  = float(today["Close"])
 
-        if close < 5 or vol_today == 0: return None
-        avg_vol   = float(prev["Volume"].mean())
-        vol_ratio = vol_today / avg_vol if avg_vol > 0 else 0
-
-        if vol_today < 100_000 or vol_ratio < 2.0: return None
+        if close < 5: return None
 
         high_10   = float(prev["High"].max())
         low_10    = float(prev["Low"].min())
         range_pct = (high_10 - low_10) / high_10 if high_10 > 0 else 1
 
+        # Consolidation filter — range must be less than 10%
         if range_pct > 0.10 or close <= high_10: return None
 
+        # Sector filter
         try:
             info     = ticker.info
             sector   = (info.get("sector","") or "").lower()
@@ -183,30 +180,67 @@ def fetch_tsx_stock(symbol):
         t_high    = float(today["High"])
         t_low     = float(today["Low"])
         brkout    = (close - high_10) / high_10 * 100
-        body      = abs(close - t_open) / close * 100
         day_range = t_high - t_low
         close_pos = (close - t_low) / day_range * 100 if day_range > 0 else 0
-        elephant  = vol_ratio >= 3.0 and body >= 3.0 and close_pos >= 75.0
 
+        # ── OLIVER VELEZ ELEPHANT BAR DEFINITION ─────────────────────────────
+        # Body must be larger than 70% of the last 20 bars
+        last_20_bodies = []
+        for i in range(2, 22):
+            try:
+                bar_open  = float(hist["Open"].iloc[-i])
+                bar_close = float(hist["Close"].iloc[-i])
+                last_20_bodies.append(abs(bar_close - bar_open))
+            except: pass
+
+        if len(last_20_bodies) < 10: return None
+
+        today_body = abs(close - t_open)
+        last_20_sorted = sorted(last_20_bodies)
+        percentile_70  = last_20_sorted[int(len(last_20_sorted) * 0.70)]
+
+        # True Elephant Bar = body beats 70th percentile AND closes near high
+        is_elephant = (today_body > percentile_70 and close_pos >= 75.0)
+
+        # How many bars does today's body beat (for display)
+        bars_beaten     = sum(1 for b in last_20_bodies if today_body > b)
+        eb_pct          = round(bars_beaten / len(last_20_bodies) * 100, 1)
+
+        # Body % for display
+        body_pct = abs(close - t_open) / close * 100
+
+        # ── Scoring ───────────────────────────────────────────────────────────
+        # Consolidation tightness (0-5)
         n = 5 if range_pct<0.02 else 4 if range_pct<0.03 else 3 if range_pct<0.05 else 2 if range_pct<0.06 else 1
-        v = 3 if vol_ratio>=5 else 2 if vol_ratio>=3 else 1
-        b = 2 if brkout>=3 else 1 if brkout>=1 else 0
-        e = 2 if elephant else 0
+
+        # Elephant Bar strength (0-3)
+        if eb_pct >= 95:   e = 3
+        elif eb_pct >= 85: e = 2
+        elif eb_pct >= 70: e = 1
+        else:              e = 0
+
+        # Breakout strength (0-2)
+        b = 2 if brkout >= 3 else 1 if brkout >= 1 else 0
+
+        # Close position (0-2)
+        p = 2 if close_pos >= 90 else 1 if close_pos >= 75 else 0
+
+        total = n + e + b + p
 
         return {
-            "symbol":    symbol.replace(".TO",""),
-            "score":     n+v+b+e,
-            "n": n, "v": v, "b": b, "e": e,
-            "elephant":  elephant,
-            "close":     round(close, 2),
-            "volume":    int(vol_today),
-            "vol_ratio": round(vol_ratio, 1),
-            "body_pct":  round(body, 1),
-            "close_pos": round(close_pos, 1),
-            "range_pct": round(range_pct*100, 2),
+            "symbol":       symbol.replace(".TO",""),
+            "score":        total,
+            "n": n, "e": e, "b": b, "p": p,
+            "elephant":     is_elephant,
+            "eb_pct":       eb_pct,
+            "close":        round(close, 2),
+            "volume":       int(today["Volume"]),
+            "body_pct":     round(body_pct, 1),
+            "close_pos":    round(close_pos, 1),
+            "range_pct":    round(range_pct*100, 2),
             "breakout_pct": round(brkout, 2),
-            "high_10d":  round(high_10, 2),
-            "low_10d":   round(low_10, 2),
+            "high_10d":     round(high_10, 2),
+            "low_10d":      round(low_10, 2),
         }
     except: return None
 
@@ -228,7 +262,7 @@ def run_tsx_scan():
                 r = f.result()
                 if r: results.append(r)
             except: pass
-    results.sort(key=lambda x: (-x["score"], -x["vol_ratio"]))
+    results.sort(key=lambda x: (-x["score"], -x["eb_pct"]))
     progress.progress(100, text="Scan complete!")
     time.sleep(0.5)
     progress.empty()
@@ -271,17 +305,17 @@ def display_results(results):
                 </div>
                 <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:0.8rem">
                     <div><div class="metric-label">Price CAD</div><div class="metric-value">${r['close']:,.2f}</div></div>
-                    <div><div class="metric-label">Volume</div><div class="metric-value">{r['volume']:,}</div></div>
-                    <div><div class="metric-label">Vol Surge</div><div class="metric-value metric-gold">{r['vol_ratio']}x</div></div>
+                    <div><div class="metric-label">EB Strength</div><div class="metric-value metric-gold">{r['eb_pct']}%ile</div></div>
                     <div><div class="metric-label">Body %</div><div class="metric-value metric-green">{r['body_pct']}%</div></div>
                     <div><div class="metric-label">Close Pos</div><div class="metric-value">{r['close_pos']}%</div></div>
                     <div><div class="metric-label">Breakout</div><div class="metric-value metric-green">+{r['breakout_pct']}%</div></div>
+                    <div><div class="metric-label">Volume</div><div class="metric-value">{r['volume']:,}</div></div>
                 </div>
                 <div style="margin-top:0.8rem;display:grid;grid-template-columns:repeat(4,1fr);gap:0.8rem">
                     <div><div class="metric-label">10d High</div><div class="metric-value">${r['high_10d']}</div></div>
                     <div><div class="metric-label">10d Low</div><div class="metric-value">${r['low_10d']}</div></div>
                     <div><div class="metric-label">Range %</div><div class="metric-value">{r['range_pct']}%</div></div>
-                    <div><div class="metric-label">N·V·B·E</div><div class="metric-value">{r['n']}·{r['v']}·{r['b']}·{r['e']}</div></div>
+                    <div><div class="metric-label">N·E·B·P</div><div class="metric-value">{r['n']}·{r['e']}·{r['b']}·{r['p']}</div></div>
                 </div>
             </div>""", unsafe_allow_html=True)
     else:
@@ -299,17 +333,17 @@ def display_results(results):
                 </div>
                 <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:0.8rem">
                     <div><div class="metric-label">Price CAD</div><div class="metric-value">${r['close']:,.2f}</div></div>
-                    <div><div class="metric-label">Volume</div><div class="metric-value">{r['volume']:,}</div></div>
-                    <div><div class="metric-label">Vol Surge</div><div class="metric-value">{r['vol_ratio']}x</div></div>
+                    <div><div class="metric-label">EB Strength</div><div class="metric-value">{r['eb_pct']}%ile</div></div>
                     <div><div class="metric-label">Body %</div><div class="metric-value">{r['body_pct']}%</div></div>
                     <div><div class="metric-label">Close Pos</div><div class="metric-value">{r['close_pos']}%</div></div>
                     <div><div class="metric-label">Breakout</div><div class="metric-value">+{r['breakout_pct']}%</div></div>
+                    <div><div class="metric-label">Volume</div><div class="metric-value">{r['volume']:,}</div></div>
                 </div>
                 <div style="margin-top:0.8rem;display:grid;grid-template-columns:repeat(4,1fr);gap:0.8rem">
                     <div><div class="metric-label">10d High</div><div class="metric-value">${r['high_10d']}</div></div>
                     <div><div class="metric-label">10d Low</div><div class="metric-value">${r['low_10d']}</div></div>
                     <div><div class="metric-label">Range %</div><div class="metric-value">{r['range_pct']}%</div></div>
-                    <div><div class="metric-label">N·V·B·E</div><div class="metric-value">{r['n']}·{r['v']}·{r['b']}·{r['e']}</div></div>
+                    <div><div class="metric-label">N·E·B·P</div><div class="metric-value">{r['n']}·{r['e']}·{r['b']}·{r['p']}</div></div>
                 </div>
             </div>""", unsafe_allow_html=True)
 
@@ -317,13 +351,13 @@ def display_results(results):
         st.markdown("""
         <div class="no-results">
             NO BREAKOUTS FOUND TODAY<br><br>
-            TSX is in Narrow or Wide Down state<br>
+            TSX is consolidating or no elephant bars fired<br>
             The scanner is telling you to stay on the sidelines<br><br>
             Best run after 4:00pm EST on trading days
         </div>""", unsafe_allow_html=True)
 
 # ── Main Layout ────────────────────────────────────────────────────────────────
-st.markdown('<div class="section-header">RANDOM CONSOLIDATION BREAKOUT SCANNER - TSX DAILY Timeframe</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-header">RANDOM CONSOLIDATION BREAKOUT SCANNER - TSX DAILY TIMEFRAME</div>', unsafe_allow_html=True)
 
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
@@ -342,6 +376,7 @@ else:
     st.markdown("""
     <div class="no-results">
         CLICK RUN TSX SCAN TO START<br><br>
+        Elephant Bar: body larger than 70% of last 20 bars (Oliver Velez)<br>
         Best run after 4:00pm EST on trading days
     </div>""", unsafe_allow_html=True)
 
@@ -349,7 +384,7 @@ else:
 st.markdown("""
 <div style="text-align:center;margin-top:3rem;padding-top:1rem;border-top:1px solid #1a2a3a">
     <span style="font-family:Space Mono,monospace;font-size:0.6rem;letter-spacing:0.4em;color:#1a2a3a">
-        ♠ ACE TRADING SYSTEM · ACCUMULATION COMPUTATION ENGINE · NOT FINANCIAL ADVICE
+        ♠ ACE 2 RCB · RANDOM CONSOLIDATION BREAKOUT · TSX · D1 · NOT FINANCIAL ADVICE
     </span>
 </div>
 """, unsafe_allow_html=True)
