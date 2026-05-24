@@ -183,6 +183,15 @@ def fetch_tsx_stock(symbol):
         day_range = t_high - t_low
         close_pos = (close - t_low) / day_range * 100 if day_range > 0 else 0
 
+        # ── FLAT MA20 FILTER (Oliver Velez — price within 3% of MA20) ──────────
+        # Flat MA20 = balance between buyers and sellers = consolidation state
+        # We check yesterday's close vs MA20 (before today's breakout move)
+        ma20  = float(hist["Close"].iloc[-21:-1].mean())
+        prev_close = float(hist["Close"].iloc[-2])
+        price_to_ma20 = abs(prev_close - ma20) / ma20 * 100
+        if price_to_ma20 > 3.0:
+            return None
+
         # ── OLIVER VELEZ ELEPHANT BAR DEFINITION ─────────────────────────────
         # Body must be larger than 70% of the last 20 bars
         last_20_bodies = []
@@ -228,19 +237,21 @@ def fetch_tsx_stock(symbol):
         total = n + e + b + p
 
         return {
-            "symbol":       symbol.replace(".TO",""),
-            "score":        total,
+            "symbol":         symbol.replace(".TO",""),
+            "score":          total,
             "n": n, "e": e, "b": b, "p": p,
-            "elephant":     is_elephant,
-            "eb_pct":       eb_pct,
-            "close":        round(close, 2),
-            "volume":       int(today["Volume"]),
-            "body_pct":     round(body_pct, 1),
-            "close_pos":    round(close_pos, 1),
-            "range_pct":    round(range_pct*100, 2),
-            "breakout_pct": round(brkout, 2),
-            "high_10d":     round(high_10, 2),
-            "low_10d":      round(low_10, 2),
+            "elephant":       is_elephant,
+            "eb_pct":         eb_pct,
+            "close":          round(close, 2),
+            "volume":         int(today["Volume"]),
+            "body_pct":       round(body_pct, 1),
+            "close_pos":      round(close_pos, 1),
+            "range_pct":      round(range_pct*100, 2),
+            "breakout_pct":   round(brkout, 2),
+            "high_10d":       round(high_10, 2),
+            "low_10d":        round(low_10, 2),
+            "ma20":           round(ma20, 2),
+            "price_to_ma20":  round(price_to_ma20, 2),
         }
     except: return None
 
@@ -311,10 +322,11 @@ def display_results(results):
                     <div><div class="metric-label">Breakout</div><div class="metric-value metric-green">+{r['breakout_pct']}%</div></div>
                     <div><div class="metric-label">Volume</div><div class="metric-value">{r['volume']:,}</div></div>
                 </div>
-                <div style="margin-top:0.8rem;display:grid;grid-template-columns:repeat(4,1fr);gap:0.8rem">
+                <div style="margin-top:0.8rem;display:grid;grid-template-columns:repeat(5,1fr);gap:0.8rem">
                     <div><div class="metric-label">10d High</div><div class="metric-value">${r['high_10d']}</div></div>
                     <div><div class="metric-label">10d Low</div><div class="metric-value">${r['low_10d']}</div></div>
-                    <div><div class="metric-label">Range %</div><div class="metric-value">{r['range_pct']}%</div></div>
+                    <div><div class="metric-label">MA20</div><div class="metric-value">${r['ma20']}</div></div>
+                    <div><div class="metric-label">Price/MA20</div><div class="metric-value metric-gold">{r['price_to_ma20']}%</div></div>
                     <div><div class="metric-label">N·E·B·P</div><div class="metric-value">{r['n']}·{r['e']}·{r['b']}·{r['p']}</div></div>
                 </div>
             </div>""", unsafe_allow_html=True)
@@ -339,10 +351,11 @@ def display_results(results):
                     <div><div class="metric-label">Breakout</div><div class="metric-value">+{r['breakout_pct']}%</div></div>
                     <div><div class="metric-label">Volume</div><div class="metric-value">{r['volume']:,}</div></div>
                 </div>
-                <div style="margin-top:0.8rem;display:grid;grid-template-columns:repeat(4,1fr);gap:0.8rem">
+                <div style="margin-top:0.8rem;display:grid;grid-template-columns:repeat(5,1fr);gap:0.8rem">
                     <div><div class="metric-label">10d High</div><div class="metric-value">${r['high_10d']}</div></div>
                     <div><div class="metric-label">10d Low</div><div class="metric-value">${r['low_10d']}</div></div>
-                    <div><div class="metric-label">Range %</div><div class="metric-value">{r['range_pct']}%</div></div>
+                    <div><div class="metric-label">MA20</div><div class="metric-value">${r['ma20']}</div></div>
+                    <div><div class="metric-label">Price/MA20</div><div class="metric-value">{r['price_to_ma20']}%</div></div>
                     <div><div class="metric-label">N·E·B·P</div><div class="metric-value">{r['n']}·{r['e']}·{r['b']}·{r['p']}</div></div>
                 </div>
             </div>""", unsafe_allow_html=True)
