@@ -183,14 +183,20 @@ def fetch_tsx_stock(symbol):
         day_range = t_high - t_low
         close_pos = (close - t_low) / day_range * 100 if day_range > 0 else 0
 
-        # ── FLAT MA20 FILTER (Oliver Velez — price within 3% of MA20) ──────────
-        # Flat MA20 = balance between buyers and sellers = consolidation state
-        # We check yesterday's close vs MA20 (before today's breakout move)
-        ma20  = float(hist["Close"].iloc[-21:-1].mean())
-        prev_close = float(hist["Close"].iloc[-2])
-        price_to_ma20 = abs(prev_close - ma20) / ma20 * 100
-        if price_to_ma20 > 3.0:
+        # ── MA20 SLOPE FILTER (Oliver Velez — flat or declining MA20) ──────────
+        # Slope < 0 = MA20 declining or flat = Wide Down or Narrow State
+        # This is the condition for Wealthsimple LONG setups
+        # Calculate MA20 5 days ago vs MA20 today to get slope direction
+        ma20       = float(hist["Close"].iloc[-21:-1].mean())
+        ma20_5ago  = float(hist["Close"].iloc[-26:-6].mean())
+        ma20_slope = (ma20 - ma20_5ago) / ma20_5ago * 100  # % change over 5 days
+
+        # Only keep stocks where MA20 is flat or declining (slope <= 0.1%)
+        # Small positive tolerance (0.1%) to catch MA20 just turning flat
+        if ma20_slope > 0.1:
             return None
+
+        price_to_ma20 = abs(float(hist["Close"].iloc[-2]) - ma20) / ma20 * 100
 
         # ── OLIVER VELEZ ELEPHANT BAR DEFINITION ─────────────────────────────
         # Body must be larger than 70% of the last 20 bars
@@ -251,6 +257,7 @@ def fetch_tsx_stock(symbol):
             "high_10d":       round(high_10, 2),
             "low_10d":        round(low_10, 2),
             "ma20":           round(ma20, 2),
+            "ma20_slope":     round(ma20_slope, 2),
             "price_to_ma20":  round(price_to_ma20, 2),
         }
     except: return None
@@ -326,7 +333,7 @@ def display_results(results):
                     <div><div class="metric-label">10d High</div><div class="metric-value">${r['high_10d']}</div></div>
                     <div><div class="metric-label">10d Low</div><div class="metric-value">${r['low_10d']}</div></div>
                     <div><div class="metric-label">MA20</div><div class="metric-value">${r['ma20']}</div></div>
-                    <div><div class="metric-label">Price/MA20</div><div class="metric-value metric-gold">{r['price_to_ma20']}%</div></div>
+                    <div><div class="metric-label">MA20 Slope</div><div class="metric-value metric-gold">{r['ma20_slope']}%</div></div>
                     <div><div class="metric-label">N·E·B·P</div><div class="metric-value">{r['n']}·{r['e']}·{r['b']}·{r['p']}</div></div>
                 </div>
             </div>""", unsafe_allow_html=True)
@@ -355,7 +362,7 @@ def display_results(results):
                     <div><div class="metric-label">10d High</div><div class="metric-value">${r['high_10d']}</div></div>
                     <div><div class="metric-label">10d Low</div><div class="metric-value">${r['low_10d']}</div></div>
                     <div><div class="metric-label">MA20</div><div class="metric-value">${r['ma20']}</div></div>
-                    <div><div class="metric-label">Price/MA20</div><div class="metric-value">{r['price_to_ma20']}%</div></div>
+                    <div><div class="metric-label">MA20 Slope</div><div class="metric-value">{r['ma20_slope']}%</div></div>
                     <div><div class="metric-label">N·E·B·P</div><div class="metric-value">{r['n']}·{r['e']}·{r['b']}·{r['p']}</div></div>
                 </div>
             </div>""", unsafe_allow_html=True)
@@ -370,7 +377,7 @@ def display_results(results):
         </div>""", unsafe_allow_html=True)
 
 # ── Main Layout ────────────────────────────────────────────────────────────────
-st.markdown('<div class="section-header">RANDOM CONSOLIDATION BREAKOUT SCANNER - TSX DAILY TIMEFRAME</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-header">RANDOM CONSOLIDATION BREAKOUT SCANNER - TSX DAILY TIMEFRAME — LONG SETUPS ONLY (MA20 SLOPE ≤ 0)</div>', unsafe_allow_html=True)
 
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
