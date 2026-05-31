@@ -396,7 +396,7 @@ else:
     st.markdown("""
     <div class="no-results">
         CLICK RUN TSX SCAN TO START<br><br>
-        Elephant Bar: body larger than 70% of last 20 bars (Oliver Velez)<br>
+        Elephant Bar: body larger than 70% of last 20 bars<br>
         Best run after 4:00pm EST on trading days
     </div>""", unsafe_allow_html=True)
 
