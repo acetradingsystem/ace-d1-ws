@@ -191,9 +191,9 @@ def fetch_tsx_stock(symbol):
         ma20_5ago  = float(hist["Close"].iloc[-26:-6].mean())
         ma20_slope = (ma20 - ma20_5ago) / ma20_5ago * 100  # % change over 5 days
 
-        # Only keep stocks where MA20 is flat or declining (slope <= 1.0%)
-        # 1.0% tolerance catches nearly flat MA20s like CCA and CGO
-        if ma20_slope > 1.0:
+       # Only keep stocks where MA20 is declining (slope < 0%)
+# Wide Down state only — flat/rising MA20 filtered out
+        if ma20_slope >= 0:
             return None
 
         price_to_ma20 = abs(float(hist["Close"].iloc[-2]) - ma20) / ma20 * 100
