@@ -162,10 +162,8 @@ def fetch_tsx_stock(symbol):
         low_10    = float(prev["Low"].min())
         range_pct = (high_10 - low_10) / high_10 if high_10 > 0 else 1
 
-        # Consolidation filter — range must be less than 10%
         if range_pct > 0.10 or close <= high_10: return None
 
-        # Sector filter
         try:
             info     = ticker.info
             sector   = (info.get("sector","") or "").lower()
@@ -183,23 +181,17 @@ def fetch_tsx_stock(symbol):
         day_range = t_high - t_low
         close_pos = (close - t_low) / day_range * 100 if day_range > 0 else 0
 
-        # ── MA20 SLOPE FILTER (Oliver Velez — flat or declining MA20) ──────────
-        # Slope < 0 = MA20 declining or flat = Wide Down or Narrow State
-        # This is the condition for Wealthsimple LONG setups
-        # Calculate MA20 5 days ago vs MA20 today to get slope direction
         ma20       = float(hist["Close"].iloc[-21:-1].mean())
         ma20_5ago  = float(hist["Close"].iloc[-26:-6].mean())
-        ma20_slope = (ma20 - ma20_5ago) / ma20_5ago * 100  # % change over 5 days
+        ma20_slope = (ma20 - ma20_5ago) / ma20_5ago * 100
 
-       # Only keep stocks where MA20 is declining (slope < 0%)
-# Wide Down state only — flat/rising MA20 filtered out
+        # Only keep stocks where MA20 is declining (slope < 0%)
+        # Wide Down state only — flat/rising MA20 filtered out
         if ma20_slope >= 0:
             return None
 
         price_to_ma20 = abs(float(hist["Close"].iloc[-2]) - ma20) / ma20 * 100
 
-        # ── OLIVER VELEZ ELEPHANT BAR DEFINITION ─────────────────────────────
-        # Body must be larger than 70% of the last 20 bars
         last_20_bodies = []
         for i in range(2, 22):
             try:
@@ -214,30 +206,22 @@ def fetch_tsx_stock(symbol):
         last_20_sorted = sorted(last_20_bodies)
         percentile_70  = last_20_sorted[int(len(last_20_sorted) * 0.70)]
 
-        # True Elephant Bar = body beats 70th percentile AND closes near high
         is_elephant = (today_body > percentile_70 and close_pos >= 75.0)
 
-        # How many bars does today's body beat (for display)
         bars_beaten     = sum(1 for b in last_20_bodies if today_body > b)
         eb_pct          = round(bars_beaten / len(last_20_bodies) * 100, 1)
 
-        # Body % for display
         body_pct = abs(close - t_open) / close * 100
 
-        # ── Scoring ───────────────────────────────────────────────────────────
-        # Consolidation tightness (0-5)
         n = 5 if range_pct<0.02 else 4 if range_pct<0.03 else 3 if range_pct<0.05 else 2 if range_pct<0.06 else 1
 
-        # Elephant Bar strength (0-3)
         if eb_pct >= 95:   e = 3
         elif eb_pct >= 85: e = 2
         elif eb_pct >= 70: e = 1
         else:              e = 0
 
-        # Breakout strength (0-2)
         b = 2 if brkout >= 3 else 1 if brkout >= 1 else 0
 
-        # Close position (0-2)
         p = 2 if close_pos >= 90 else 1 if close_pos >= 75 else 0
 
         total = n + e + b + p
@@ -286,18 +270,15 @@ def run_tsx_scan():
     progress.empty()
     return results
 
-# ── Score Badge ────────────────────────────────────────────────────────────────
 def score_badge(score):
     cls = ("score-10" if score==10 else "score-9" if score==9 else
            "score-8"  if score>=8  else "score-7"  if score>=7 else "score-low")
     return f'<span class="{cls}">{score}</span>'
 
-# ── Display Results ────────────────────────────────────────────────────────────
 def display_results(results):
     elephants = [r for r in results if r["elephant"]]
     regular   = [r for r in results if not r["elephant"]]
 
-    # Stats
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         st.markdown(f'<div class="stat-box"><div class="stat-number metric-gold">{len(elephants)}</div><div class="stat-label">🐘 Elephant Bars</div></div>', unsafe_allow_html=True)
@@ -311,7 +292,6 @@ def display_results(results):
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Elephant Bars
     if elephants:
         st.markdown('<div class="elephant-label">🐘 ELEPHANT BARS — A+ SETUPS — CHECK LOCATION BEFORE TRADING</div>', unsafe_allow_html=True)
         for r in elephants:
@@ -321,26 +301,21 @@ def display_results(results):
                     <span class="coin-name">🐘 {r['symbol']}</span>
                     {score_badge(r['score'])}
                 </div>
-                <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:0.8rem">
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.8rem;margin-bottom:0.8rem">
                     <div><div class="metric-label">Price CAD</div><div class="metric-value">${r['close']:,.2f}</div></div>
-                    <div><div class="metric-label">EB Strength</div><div class="metric-value metric-gold">{r['eb_pct']}%ile</div></div>
-                    <div><div class="metric-label">Body %</div><div class="metric-value metric-green">{r['body_pct']}%</div></div>
+                    <div><div class="metric-label">EB Strength</div><div class="metric-value metric-gold">{r['eb_pct']}%</div></div>
                     <div><div class="metric-label">Close Pos</div><div class="metric-value">{r['close_pos']}%</div></div>
                     <div><div class="metric-label">Breakout</div><div class="metric-value metric-green">+{r['breakout_pct']}%</div></div>
-                    <div><div class="metric-label">Volume</div><div class="metric-value">{r['volume']:,}</div></div>
                 </div>
-                <div style="margin-top:0.8rem;display:grid;grid-template-columns:repeat(5,1fr);gap:0.8rem">
-                    <div><div class="metric-label">10d High</div><div class="metric-value">${r['high_10d']}</div></div>
-                    <div><div class="metric-label">10d Low</div><div class="metric-value">${r['low_10d']}</div></div>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.8rem">
                     <div><div class="metric-label">MA20</div><div class="metric-value">${r['ma20']}</div></div>
                     <div><div class="metric-label">MA20 Slope</div><div class="metric-value metric-gold">{r['ma20_slope']}%</div></div>
-                    <div><div class="metric-label">N·E·B·P</div><div class="metric-value">{r['n']}·{r['e']}·{r['b']}·{r['p']}</div></div>
+                    <div><div class="metric-label">Volume</div><div class="metric-value">{r['volume']:,}</div></div>
                 </div>
             </div>""", unsafe_allow_html=True)
     else:
         st.markdown('<div style="color:#4a7a4a;font-family:Space Mono,monospace;font-size:0.75rem;text-align:center;padding:1.5rem;border:1px dashed #2a4a2a;border-radius:8px;margin-bottom:1rem">🐘 No Elephant Bars today — waiting for the A+ setup</div>', unsafe_allow_html=True)
 
-    # Regular Breakouts
     if regular:
         st.markdown('<div class="regular-label">◈ REGULAR BREAKOUTS — WATCH LIST ONLY</div>', unsafe_allow_html=True)
         for r in regular:
@@ -350,20 +325,16 @@ def display_results(results):
                     <span class="coin-name">{r['symbol']}</span>
                     {score_badge(r['score'])}
                 </div>
-                <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:0.8rem">
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.8rem;margin-bottom:0.8rem">
                     <div><div class="metric-label">Price CAD</div><div class="metric-value">${r['close']:,.2f}</div></div>
-                    <div><div class="metric-label">EB Strength</div><div class="metric-value">{r['eb_pct']}%ile</div></div>
-                    <div><div class="metric-label">Body %</div><div class="metric-value">{r['body_pct']}%</div></div>
+                    <div><div class="metric-label">EB Strength</div><div class="metric-value">{r['eb_pct']}%</div></div>
                     <div><div class="metric-label">Close Pos</div><div class="metric-value">{r['close_pos']}%</div></div>
                     <div><div class="metric-label">Breakout</div><div class="metric-value">+{r['breakout_pct']}%</div></div>
-                    <div><div class="metric-label">Volume</div><div class="metric-value">{r['volume']:,}</div></div>
                 </div>
-                <div style="margin-top:0.8rem;display:grid;grid-template-columns:repeat(5,1fr);gap:0.8rem">
-                    <div><div class="metric-label">10d High</div><div class="metric-value">${r['high_10d']}</div></div>
-                    <div><div class="metric-label">10d Low</div><div class="metric-value">${r['low_10d']}</div></div>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.8rem">
                     <div><div class="metric-label">MA20</div><div class="metric-value">${r['ma20']}</div></div>
                     <div><div class="metric-label">MA20 Slope</div><div class="metric-value">{r['ma20_slope']}%</div></div>
-                    <div><div class="metric-label">N·E·B·P</div><div class="metric-value">{r['n']}·{r['e']}·{r['b']}·{r['p']}</div></div>
+                    <div><div class="metric-label">Volume</div><div class="metric-value">{r['volume']:,}</div></div>
                 </div>
             </div>""", unsafe_allow_html=True)
 
@@ -387,7 +358,7 @@ if run:
     with st.spinner(""):
         results = run_tsx_scan()
         st.session_state["tsx_results"] = results
-        st.session_state["tsx_time"]    = datetime.now().strftime("%Y-%m-%d %H:%M ET")
+        st.session_state["tsx_time"]    = datetime.now().strftime("%Y-%m-%d %H:%M UTC")
 
 if "tsx_results" in st.session_state:
     st.markdown(f'<div class="timestamp">Last scan: {st.session_state["tsx_time"]}</div>', unsafe_allow_html=True)
