@@ -7,7 +7,7 @@ import requests
 
 # ── Page Config ───────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="ACE Trading System — TSX Scanner",
+    page_title="ACE Wide State Scanner",
     page_icon="♠",
     layout="wide",
     initial_sidebar_state="collapsed"
